@@ -2,6 +2,7 @@
 #include "Wire.h"
 #include "I2Cdev.h"
 #include "MPU6050.h"
+#include "MS561101BA.h"
 #include "String.h"
 
 #include <Servo.h>
@@ -15,6 +16,7 @@
 #define ToDeg(x) (x*57.2957795131)  // *180/pi
 
 MPU6050 accelgyro;
+MS561101BA baro = MS561101BA();
 
 int16_t ax, ay, az;
 int16_t gx, gy, gz;
@@ -47,15 +49,29 @@ float roll_I;
 float roll_D;
 float err_roll_old;
 
-float throttle;
+float kp = 3.0;
+float ki = 0.9; 
+float kd = 0.6;
 
 float pid_yaw;
 float err_yaw;
 float yaw_I;
 
-float kp = 3.0;
-float ki = 0.9; 
-float kd = 0.6;
+float err_altitude;
+float err_altitude_old;
+float command_altitude;
+float altitude_I;
+float altitude_D;
+float pressure_demand;
+float pressure;
+float pid_altitude;
+bool altitude_init;
+
+float throttle;
+
+
+float press;
+
 
 Servo Servo_1;
 Servo Servo_2;
@@ -98,6 +114,8 @@ void setup()
   
 
   calib_gyro();
+  
+  baro.init(MS561101BA_ADDR_CSB_LOW);
 
   timer = micros();
   delay(20);
@@ -122,6 +140,7 @@ void fast_Loop(){
 
   imu_Valget (); // read sensors
 
+  press = baro.getPressure(MS561101BA_OSR_4096);
   
   
 
@@ -149,6 +168,34 @@ void fast_Loop(){
   pid_yaw = err_yaw*6.0+yaw_I*6.0;
   //pid_yaw=0;
   //Throttle
+  
+  //ALTITUDE
+  if(rc[4]>1500)
+  {
+    if(altitude_init==false)
+    {
+      pressure_demand = press;
+      altitude_init = true;
+    }
+    
+    err_altitude_old = err_altitude;
+    err_altitude = - pressure_demand + press;
+    //err_altitude = constrain(err_altitude,-60,60);  
+    altitude_D = (float)(err_altitude-err_altitude_old)/G_Dt;
+    altitude_I += (float)err_altitude*G_Dt;
+    //altitude_I = constrain(altitude_I,-150,150);
+    pid_altitude = err_altitude*180.0 + altitude_I*50.0 + altitude_D*50.0;
+  }
+  else
+  {
+    altitude_init = false; //if we want to enable the altitude hold more than once
+    pid_altitude = 0;
+    altitude_I = 0;
+  }
+  
+  
+  IMU_print();
+  
 
   throttle = constrain(rc[2]*1.20,1000,1900);
 
@@ -157,18 +204,19 @@ void fast_Loop(){
     pid_pitch=0;
     pid_roll=0;
     pid_yaw=0;
+    pid_altitude = 0;
 
     pitch_I=0;
     roll_I=0;
     yaw_I=0;
   }
 
-  IMU_print();
+  //IMU_print();
 
-  Servo_2.writeMicroseconds(constrain(throttle+pid_roll-pid_pitch+pid_yaw,1000,1900));//arrière droit
-  Servo_1.writeMicroseconds(constrain(throttle-pid_roll+pid_pitch+pid_yaw,1000,1900));//avant gauche
-  Servo_3.writeMicroseconds(constrain(throttle-pid_roll-pid_pitch-pid_yaw,1000,1900));//arrière gauche
-  Servo_4.writeMicroseconds(constrain(throttle+pid_roll+pid_pitch-pid_yaw,1000,1900));//avant droit
+  Servo_2.writeMicroseconds(constrain(throttle+pid_roll-pid_pitch+pid_yaw+pid_altitude,1000,1900));//arrière droit
+  Servo_1.writeMicroseconds(constrain(throttle-pid_roll+pid_pitch+pid_yaw+pid_altitude,1000,1900));//avant gauche
+  Servo_3.writeMicroseconds(constrain(throttle-pid_roll-pid_pitch-pid_yaw+pid_altitude,1000,1900));//arrière gauche
+  Servo_4.writeMicroseconds(constrain(throttle+pid_roll+pid_pitch-pid_yaw+pid_altitude,1000,1900));//avant droit
 
 
 /*
