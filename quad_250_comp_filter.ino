@@ -56,22 +56,27 @@ float kd = 0.6;
 float pid_yaw;
 float err_yaw;
 float yaw_I;
+float command_yaw;
 
 float err_altitude;
 float err_altitude_old;
 float command_altitude;
 float altitude_I;
 float altitude_D;
-float pressure_demand;
-float pressure;
+float altitude_demand;
+float altitude;
 float pid_altitude;
 bool altitude_init;
 
 float throttle;
 
+///BARO INIT
+#define MOVAVG_SIZE 32
+float movavg_buff[MOVAVG_SIZE];
+int movavg_i=0;
 
-float press;
-
+const float sea_press = 1013.25;
+float press, temp;
 
 Servo Servo_1;
 Servo Servo_2;
@@ -116,6 +121,9 @@ void setup()
   calib_gyro();
   
   baro.init(MS561101BA_ADDR_CSB_LOW);
+  for(int i=0; i<MOVAVG_SIZE; i++) {
+    movavg_buff[i] = baro.getPressure(MS561101BA_OSR_4096);
+  }
 
   timer = micros();
   delay(20);
@@ -140,9 +148,16 @@ void fast_Loop(){
 
   imu_Valget (); // read sensors
 
-  press = baro.getPressure(MS561101BA_OSR_4096);
-  
-  
+    float temperature = baro.getTemperature(MS561101BA_OSR_4096);
+  if(temperature) {
+    temp = temperature;
+  }
+    press = baro.getPressure(MS561101BA_OSR_4096);
+  if(press!=NULL) {
+    pushAvg(press);
+  }
+  press = getAvg(movavg_buff, MOVAVG_SIZE);
+  altitude = getAltitude(press, temp)*100.0;
 
   //pid pitch = rc1
   command_pitch = -(rc[1]-1200.0)/20;
@@ -163,7 +178,8 @@ void fast_Loop(){
   //pid_roll=0; //à supprimer
 
   //YAW
-  err_yaw = (float)(-(gz-biasZ))*2000.0f/32768.0f;
+  command_yaw = (rc[3]-1200.0)/20;
+  err_yaw = command_yaw + (float)(-(gz-biasZ))*2000.0f/32768.0f;
   yaw_I += (float)err_yaw*G_Dt; 
   pid_yaw = err_yaw*6.0+yaw_I*6.0;
   //pid_yaw=0;
@@ -174,17 +190,17 @@ void fast_Loop(){
   {
     if(altitude_init==false)
     {
-      pressure_demand = press;
+      altitude_demand = altitude;
       altitude_init = true;
     }
     
     err_altitude_old = err_altitude;
-    err_altitude = - pressure_demand + press;
-    //err_altitude = constrain(err_altitude,-60,60);  
+    err_altitude =  altitude_demand - altitude;
+    err_altitude = constrain(err_altitude,-60,60);  
     altitude_D = (float)(err_altitude-err_altitude_old)/G_Dt;
     altitude_I += (float)err_altitude*G_Dt;
-    //altitude_I = constrain(altitude_I,-150,150);
-    pid_altitude = err_altitude*180.0 + altitude_I*50.0 + altitude_D*50.0;
+    altitude_I = constrain(altitude_I,-150,150);
+    pid_altitude = err_altitude*0.9 + altitude_I*0.25 + altitude_D*0.5;
   }
   else
   {
@@ -194,7 +210,7 @@ void fast_Loop(){
   }
   
   
-  IMU_print();
+  //IMU_print();
   
 
   throttle = constrain(rc[2]*1.20,1000,1900);
