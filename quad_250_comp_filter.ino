@@ -132,7 +132,7 @@ void setup()
 
 void loop()
 {
-  if((micros()-timer)>=5000)   
+  if((micros()-timer)>=10000)   
   { 
     timer_old = timer;
     timer=micros();
@@ -165,7 +165,7 @@ void fast_Loop(){
   pitch_D = (float)(-gx+biasX)*2000.0f/32768.0f;
   pitch_I += (float)err_pitch*G_Dt; 
   //pitch_I = constrain(pitch_I,-50,50);
-  pid_pitch = err_pitch*kp+pitch_I*ki+pitch_D*kd; //P=10 I=15 D=5 was good //D=8 the limit //P=15 I=30 D=5
+  pid_pitch = err_pitch*4.0+pitch_I*0.6+pitch_D*0.8; //P=10 I=15 D=5 was good //D=8 the limit //P=15 I=30 D=5
   //pid_pitch = 0;
 
   //ROLL
@@ -174,11 +174,11 @@ void fast_Loop(){
   roll_D = (float)(gy-biasY)*2000.0f/32768.0f;
   roll_I += (float)err_roll*G_Dt; 
   //roll_I = constrain(roll_I,-50,50);
-  pid_roll = err_roll*kp+roll_I*ki+roll_D*kd; //P=0.1 I=0.85 D=0.1
+  pid_roll = err_roll*2.0+roll_I*0.3+roll_D*0.4; //P=0.1 I=0.85 D=0.1
   //pid_roll=0; //à supprimer
 
   //YAW
-  command_yaw = (rc[3]-1200.0)/20;
+  command_yaw = (rc[3]-1200.0)/5;
   err_yaw = command_yaw + (float)(-(gz-biasZ))*2000.0f/32768.0f;
   yaw_I += (float)err_yaw*G_Dt; 
   pid_yaw = err_yaw*6.0+yaw_I*6.0;
@@ -197,7 +197,10 @@ void fast_Loop(){
     err_altitude_old = err_altitude;
     err_altitude =  altitude_demand - altitude;
     err_altitude = constrain(err_altitude,-60,60);  
-    altitude_D = (float)(err_altitude-err_altitude_old)/G_Dt;
+    if(err_altitude!=err_altitude_old)
+    {
+      altitude_D = (float)(err_altitude-err_altitude_old)/G_Dt;
+    }
     altitude_I += (float)err_altitude*G_Dt;
     altitude_I = constrain(altitude_I,-150,150);
     pid_altitude = err_altitude*0.9 + altitude_I*0.25 + altitude_D*0.5;
@@ -210,7 +213,7 @@ void fast_Loop(){
   }
   
   
-  //IMU_print();
+  IMU_print();
   
 
   throttle = constrain(rc[2]*1.20,1000,1900);

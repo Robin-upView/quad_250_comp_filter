@@ -59,13 +59,13 @@ void calib_gyro()
 
 void IMU_print ()
 {
-   Serial.print(G_Dt,5);
+   Serial.print(pid_altitude);
   Serial.print(" ");
-  Serial.print(rc[3]);
+  Serial.print(altitude_D);
   Serial.print(" ");
-  Serial.print(pid_altitude);
+  Serial.print(err_altitude);
 Serial.print(" ");
-  Serial.print(altitude_demand);
+  Serial.print(command_yaw );
   Serial.println(" ");
 
   
